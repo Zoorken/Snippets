@@ -1,0 +1,139 @@
+#!/bin/bash
+
+folder="traces"
+#---------------------------
+# Find most active host pair
+#---------------------------
+rm -f stats
+for readFile in $folder/*
+do
+
+./capshow $readFile > orgFile
+numberChecking='[0-9]+'
+#Mask out the ipaddresses part.
+#Remove the port nr to serilize the data
+#remove the --> and write to file
+#Awk it and change the column order to get: a->b, b->a to be combined.
+cat orgFile | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}[:0-9]{0,5} --> [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}[:0-9]{1,5}'| sed -r 's/:[0-9]{0,5}//g' | sed 's/ --> / /g' > temp
+cat temp | awk '{print $2, $1}' >>  temp
+
+#Find mahp
+cat temp | sort | uniq -c | sort -b -n -r | sed '1!d' | awk '{print $2, $3}'> maph
+ip1=`cat maph | awk '{print $1}'`
+ip2=`cat maph | awk '{print $2}'`
+#echo $ip1
+#echo $ip2
+
+#Find for the transfer data for most active host pair.
+tempSumTcp=`cat orgFile | grep 'TCP' | grep $ip1 | grep $ip2 | grep -Eo 'CAPLEN\([ 0-9]{4}' | grep -Eo '[0-9]{1,4}' | awk '{sum +=$1 }END{print sum}'` 
+
+if ! [[ $tempSumTcp =~ $numberChecking ]] ; then
+	tempSumTcp=0
+fi
+
+#echo "$ip1" "$ip2" "$tempSumTcp" >> stats
+
+tempSumUdp=`cat orgFile | grep 'UDP' | grep $ip1 | grep $ip2 | grep -Eo 'CAPLEN\([ 0-9]{4}' | grep -Eo '[0-9]{1,4}' | awk '{sum +=$1 }END{print sum}'` 
+
+if ! [[ $tempSumUdp =~ $numberChecking ]] ; then
+	tempSumUdp=0
+fi
+
+#echo "$ip1" "$ip2" "$tempSumUdp" "$tempSumTcp" > stats
+
+tempSumIcmp=`cat orgFile | grep 'ICMP' | grep $ip1 | grep $ip2 | grep -Eo 'CAPLEN\([ 0-9]{4}' | grep -Eo '[0-9]{1,4}' | awk '{sum +=$1 }END{print sum}'` 
+
+if ! [[ $tempSumIcmp =~ $numberChecking ]] ; then
+	tempSumIcmp=0
+
+#-------------------------------------------------
+#Find genneral of stats
+#-------------------------------------------------
+cat orgFile | grep "IPv4" > ip
+
+cat ip | grep -Eo 'CAPLEN\([ 0-9]{4}' | grep -Eo '[0-9]{1,4}' | awk '{sum +=$1 }END{print sum}' > lololo
+
+
+#echo "Bytes $totalBytes"
+fi
+
+
+
+#-------------------------------------------------
+#Find rest of stats
+#-------------------------------------------------
+./capinfo $readFile > orgFile2
+#grep 'duration\|tcp\|udp\|bytes:' 
+
+icmp=`cat orgFile2 | grep "icmp" | awk '{print $4}' | sed 's/(//g'`
+if ! [[ $icmp =~ $numberChecking ]] ; then
+	icmp=0
+fi
+
+tcp=`cat orgFile2 | grep "tcp" | awk '{print $4}' | sed 's/(//g'`
+if ! [[ $tcp =~ $numberChecking ]] ; then
+	tcp=0
+fi
+
+udp=`cat orgFile2 | grep "udp" | awk '{print $4}' | sed 's/(//g'`
+if ! [[ $udp =~ $numberChecking ]] ; then
+	udp=0
+fi
+
+bytes=`cat orgFile2 | grep "bytes:" | awk '{print $4}' | sed 's/(//g'`
+if ! [[ $bytes =~ $numberChecking ]] ; then
+	bytes=0
+fi
+
+duration=`cat orgFile2 | grep "duration" | awk '{print $3}' | sed 's/(//g'`
+
+
+#-------------------------------------------------
+#Print results to file
+#-------------------------------------------------
+echo "$ip1" "$ip2" "$tempSumIcmp" "$tempSumUdp" "$tempSumTcp" "$icmp" "$tcp" "$udp" "$bytes" "$duration" >> stats
+#tempSumICMP ser fel ut då det inte blir någon data där.
+
+done
+
+
+#-------------------------------------------------
+#Analyse of metrics
+#-------------------------------------------------
+
+python3 analys.py
+cat stats | awk '{print $1, $2}' > orgTemp
+cat stats | awk '{print $1, $2}' > temp
+cat stats | awk '{print $2, $1}' >> temp
+
+#Find mahp statistics
+#cat temp | sort | uniq -c | sort -b -n -r | awk '{print $2"<->"$3, $1}' |sed '1!d'> mahp
+cat temp | sort | uniq -c | sort -b -n -r | awk '{print $2"<->"$3, $1}' > mahp
+rm -f orgTemp
+
+gnuplot <<-EOF
+	set title "Most active host pair"
+	set xtics nomirror rotate by -45
+	set key noenhanced
+	set key noautotitle
+	set boxwidth 0.5
+	set style fill solid
+	set autoscale y
+	set xtics ()
+	set xlabel "Host pair"
+	set ylabel "nr of occurense"
+	set offsets graph 0, 0, 0.05, 0.05
+	
+	plot "mahp" using 2:xtic(1) with histogram
+	set term png size 1024,768
+	set output "MAHP.png"
+	replot
+EOF
+ 
+rm -f temp
+rm -f mahp
+rm -f maph
+rm -f orgFile
+rm -f orgFile2
+rm -f stats
+rm -f ip
