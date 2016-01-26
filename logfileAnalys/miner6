@@ -45,16 +45,6 @@ tempSumIcmp=`cat orgFile | grep 'ICMP' | grep $ip1 | grep $ip2 | grep -Eo 'CAPLE
 
 if ! [[ $tempSumIcmp =~ $numberChecking ]] ; then
 	tempSumIcmp=0
-
-#-------------------------------------------------
-#Find genneral of stats
-#-------------------------------------------------
-cat orgFile | grep "IPv4" > ip
-
-cat ip | grep -Eo 'CAPLEN\([ 0-9]{4}' | grep -Eo '[0-9]{1,4}' | awk '{sum +=$1 }END{print sum}' > lololo
-
-
-#echo "Bytes $totalBytes"
 fi
 
 
@@ -107,8 +97,8 @@ cat stats | awk '{print $1, $2}' > temp
 cat stats | awk '{print $2, $1}' >> temp
 
 #Find mahp statistics
-#cat temp | sort | uniq -c | sort -b -n -r | awk '{print $2"<->"$3, $1}' |sed '1!d'> mahp
-cat temp | sort | uniq -c | sort -b -n -r | awk '{print $2"<->"$3, $1}' > mahp
+cat temp | sort | uniq -c | sort -b -n -r | awk '{print $2"<->"$3, $1}' |sed '1!d'> mahp
+#cat temp | sort | uniq -c | sort -b -n -r | awk '{print $2"<->"$3, $1}' > mahp
 rm -f orgTemp
 
 gnuplot <<-EOF
@@ -136,4 +126,3 @@ rm -f maph
 rm -f orgFile
 rm -f orgFile2
 rm -f stats
-rm -f ip
