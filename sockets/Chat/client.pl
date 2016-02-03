@@ -30,10 +30,22 @@ $socket = new IO::Socket::INET(
 
 $read_set ->add($socket) or die "IO::Select";
 
-print "TCP Connection succeded\n";
-	
-#$socket->send("NICK $nickname\n");
+$socket->recv($data, 256);
+print "$data";
 
+#Trying to get nickname
+$socket->send("NICK $nickname\n");
+$socket->recv($data, 256);
+while($data !~/^OK/)
+{
+	print "$data";
+	print "Nickname: ";
+	$nickname = <STDIN>;
+	
+	$socket->send("NICK $nickname\n");
+	$socket->recv($data, 256);
+}	
+print "$data";
 while(1)
 {
 	my @readyClients = $read_set->can_read();
@@ -44,7 +56,7 @@ while(1)
 		if($sel == \*STDIN) 
 		{
 			$post = <STDIN>;
-			$socket->send("$post\n");
+			$socket->send("MSG $post\n");
 			
 		}
 		elsif($sel == $socket) #See if there is info from the socket
