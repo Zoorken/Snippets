@@ -7,15 +7,17 @@ use IO::Select;
 use IO::Pipe;
 
 #Variables:
+my($port) = @ARGV;
+
 my ($socket, $clientSocket);
 my ($clientAddr, $clientPort);
-my ($data, $readHand, @readyClients, $clientSendTo);
+my ($data, $readHand, @readyClients, $clientSendTo, $outMSG);
 my (%nicknames);
 
 #Creating TCP SOCKET
 $socket = new IO::Socket::INET(
 	LocalHost => '0.0.0.0',
-	LocalPort => 4048,
+	LocalPort => $port,
 	Proto =>'tcp',
 	Listen => 3,
 	Reuse => 1
@@ -23,7 +25,7 @@ $socket = new IO::Socket::INET(
 
 #Make ready for multiple
 $readHand = IO::Select->new($socket) or die "IO::Select";
-print "Server is waiting for clients to connect to port 8080 ok\n";
+print "Server is waiting for clients to connect to port $port ok\n";
 
 #This is where the clients will connect
 while(1)
@@ -58,65 +60,60 @@ while(1)
 				chomp($data);
 			
 				if($data =~s/^NICK //)
-				{
+				{	
 					if(length($data) > 12)
 					{
-						#name to long
-						print $client "Nickname is to longg (length($data)) max 12 chars\n";
+						$outMSG = "ERROR max 12 chars\n";
 					}
-					elsif($data !~/\w+/g)
-					{
-						#Nick should only contain A-Za-z0-9_)
-						print $client "$data should only contain alphanumerics and underscore\n";
-					}
-					elsif($data !~/\w+/g)
+					elsif($data =~/^[a-zA-Z0-9_]+$/)
 					{	
 						if(exists $nicknames{$client})
 						{
-							$client->send("You already has a nick: $nicknames{$client}\n");
+							$outMSG = "ERROR $nicknames{$client}\n"
 						}
 						else 
 						{
 							#Nick is ok
 							chomp($data);
 							$nicknames{$client} = $data; #Store the nickname
-							$client->send("Nick ok\n");
+							$outMSG = "OK Nick\n";
 						}
 					}
 					else
 					{
-						print $client "Error with: $data\n";
+						$outMSG = "ERROR only alphanumerics and underscore\n";		
 					}
+					$client->send($outMSG);	
 				}
 				elsif($data =~s/^MSG //)
 				{
 				
 					if(exists $nicknames{$client})
 					{
-						print "$nicknames{$client} : $data\n";
+						print "$nicknames{$client} : $data";
 				
-						# send message to users
-				
+						# send message to user
 						my @sockets = $readHand->can_write();
 						foreach my $sendTo (@sockets)
 						{
-							print $sendTo "$nicknames{$client}: $data";
+							$sendTo->send("MSG $nicknames{$client} $data")
+							#print $sendTo "$nicknames{$client}: $data";
 						}
 					}
 					else 
 					{
-						print $client "Error: Get yourself a nickname next time: NICK nick\n";
+						print $client "ERROR Get yourself a nickname next time: NICK nick\n";
 					}
 				}
 				else
 				{	
 					if(exists $nicknames{$client})
 					{
-						print $client "Send MSG first \n";
+						print $client "ERROR Send MSG first \n";
 					}
 					else
 					{
-						print $client "Send NICK nickname first \n";
+						print $client "ERROR Send NICK nickname first \n";
 					}
 				}
 			}
